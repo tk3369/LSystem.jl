@@ -2,6 +2,8 @@ module LSystem
 
 using MacroTools
 
+# -------------------- basic function -----------------------
+
 """
 LModel represents a L-System model.
 """
@@ -52,6 +54,15 @@ function test_algae(n = 10)
     add_rule(model, "B", split("A", ""))
     test(model, n)
 end
+
+# -------------------- DSL implementation -----------------------
+#= Sample usage for algae: 
+    @lsys begin
+        @start A
+        @rule A = AB
+        @rule B = A
+    end
+=#
 
 # original: @start F
 # expanded: model = LModel()
