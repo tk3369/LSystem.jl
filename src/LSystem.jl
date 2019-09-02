@@ -1,29 +1,56 @@
 module LSystem
 
+export LState, next, result
+export @lsys, @axiom, @rule
+
 using MacroTools
 
 # -------------------- basic function -----------------------
 
 """
-LModel represents a L-System model.
+A L-system model is represented by an axiom called `axiom`
+and a set of rewriting `rules`.
 """
 struct LModel
-    start
+    axiom
     rules
 end
 
-LModel(start) = LModel(Any[start], Dict())
+"Create a L-system model."
+LModel(axiom) = LModel(Any[axiom], Dict())
+
+"Add rule to a model."
 add_rule(lmodel, left, right) = lmodel.rules[left] = right
 
+"""
+A L-system state contains a reference to the `model`, the 
+current iteration, and the result.
+"""
 struct LState
     model
     current_iteration
     result
 end
 
-LState(model) = LState(model, 1, model.start)
+"Create a L-system state from a `model`."
+LState(model) = LState(model, 1, model.axiom)
+
+"Advance to the next state and returns a new LState object."
 next(lstate) = expand(lstate.model, lstate) 
 
+"Current result"
+result(lstate) = join(lstate.result)
+
+"Repeated next call"
+next(lstate, n) = n > 0 ? next(next(lstate), n-1) : lstate
+
+Base.show(io::IO, s::LState) = 
+    print(io, "LState(", s.current_iteration, "): ", result(s))
+
+"""
+Expand the current result to a new result by applying the 
+rewriting rules in the model.
+"""
 function expand(model, current_state)
     new_result = []
     for el in current_state.result
@@ -33,40 +60,21 @@ function expand(model, current_state)
     return LState(model, current_state.current_iteration + 1, new_result)
 end
 
-function test(model::LModel, n = 2)
-    state = LState(model)
-    println(state.current_iteration, " => ", join(state.result))
-    for i in 1:n
-        state = next(state)
-        println(state.current_iteration, " => ", join(state.result))
-    end
-end
-
-function test_koch()
-    model = LModel("F")
-    add_rule(model, "F", split("F+F−F−F+F", ""))
-    test(model)
-end
-
-function test_algae(n = 10)
-    model = LModel("A")
-    add_rule(model, "A", split("AB", ""))
-    add_rule(model, "B", split("A", ""))
-    test(model, n)
-end
-
 # -------------------- DSL implementation -----------------------
 #= Sample usage for algae: 
     @lsys begin
-        @start A
-        @rule A = AB
-        @rule B = A
+        @axiom A
+        @rule A → AB
+        @rule B → A
     end
 =#
 
-# original: @start F
+# Define syntax for the transformation operator (arrow)
+→(a, b) = (a, b)
+
+# original: @axiom F
 # expanded: model = LModel()
-macro start(ex)
+macro axiom(ex)
     if @capture(ex, v_) && v isa Symbol
         v_str = String(v)
         quote
@@ -81,7 +89,7 @@ end
 # original: @rule F = F⊕F⊖F⊖F⊕F
 # expanded: add_rule(model, "F", split("F⊕F⊖F⊖F⊕F", ""))
 macro rule(ex)
-    if @capture(ex, v_ = w_)
+    if @capture(ex, v_ → w_)
         v_str = String(v)
         w_str = String(w)
         quote
@@ -93,18 +101,31 @@ macro rule(ex)
     end
 end
 
-# TODO
+# Model DSL
 macro lsys(ex)
-    # @capture(ex, begin 
-    #     start_ 
-    #     rules__ 
-    # end) || error("capture error")
+    ret = macroexpand(@__MODULE__, ex)
 
-    # println(rmlines(start))
-    # println(rmlines.(rules))
+    # Convert model symbol e.g. ##10#model -> model_1
+    ret = MacroTools.gensym_ids(ret)
 
-    # macroexpand(rmlines(start))
-    macroexpand(@__MODULE__, ex)
+    # Replace first argument to the add_rule function with model_1 
+    ret = MacroTools.postwalk(
+        x -> @capture(x, f_(m_, left_, right_)) ?
+                :( LSystem.add_rule(model_1, $(left), $(right)) ) : x, ret)
+
+    # Make model_1 as the last expression of the block
+    ret = quote
+        $ret
+        model_1
+    end
+
+    # Flatten the code structure 
+    ret = MacroTools.flatten(ret)
+
+    # -- uncomment this line to debug --
+    # MacroTools.postwalk(rmlines, ret) |> println
+
+    return ret
 end
 
 end # module
