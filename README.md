@@ -13,10 +13,10 @@ This package implements a domain-specific language for [L-System](https://en.wik
 Create an algae model as follows:
 
 ```
-algae_model = LSystem.@lsys begin
-    @axiom A
-    @rule A → AB
-    @rule B → A
+algae_model = @lsys begin
+    axiom : A
+    rule  : A → AB
+    rule  : B → A
 end
 ```
 

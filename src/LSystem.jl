@@ -1,11 +1,11 @@
 module LSystem
 
+export @lsys
 export LState, next, result
-export @lsys, @axiom, @rule
 
 using MacroTools
 
-# -------------------- basic function -----------------------
+# L-System model definition
 
 """
 A L-system model is represented by an axiom called `axiom`
@@ -22,6 +22,17 @@ LModel(axiom) = LModel(Any[axiom], Dict())
 "Add rule to a model."
 add_rule(lmodel, left, right) = lmodel.rules[left] = right
 
+"Display model nicely."
+function Base.show(io::IO, model::LModel)
+    println(io, "LModel:")
+    println(io, "  Axiom: ", join(model.axiom))
+    for k in sort(collect(keys(model.rules)))
+        println(io, "  Rule:  ", k, " → ", join(model.rules[k]))
+    end
+end
+
+# Tracking state of the system
+
 """
 A L-system state contains a reference to the `model`, the 
 current iteration, and the result.
@@ -36,13 +47,13 @@ end
 LState(model) = LState(model, 1, model.axiom)
 
 "Advance to the next state and returns a new LState object."
-next(lstate) = expand(lstate.model, lstate) 
+next(lstate::LState) = _expand(lstate.model, lstate) 
 
 "Current result"
-result(lstate) = join(lstate.result)
+result(lstate::LState) = join(lstate.result)
 
 "Repeated next call"
-next(lstate, n) = n > 0 ? next(next(lstate), n-1) : lstate
+next(lstate::LState, n) = n > 0 ? next(next(lstate), n-1) : lstate
 
 Base.show(io::IO, s::LState) = 
     print(io, "LState(", s.current_iteration, "): ", result(s))
@@ -51,7 +62,7 @@ Base.show(io::IO, s::LState) =
 Expand the current result to a new result by applying the 
 rewriting rules in the model.
 """
-function expand(model, current_state)
+function _expand(model::LModel, current_state::LState)
     new_result = []
     for el in current_state.result
         next_el = get(model.rules, el, el)
@@ -60,72 +71,46 @@ function expand(model, current_state)
     return LState(model, current_state.current_iteration + 1, new_result)
 end
 
-# -------------------- DSL implementation -----------------------
-#= Sample usage for algae: 
-    @lsys begin
-        @axiom A
-        @rule A → AB
-        @rule B → A
-    end
-=#
+# DSL implementation
 
-# Define syntax for the transformation operator (arrow)
-→(a, b) = (a, b)
+"""
+The @lsys macro is used to construct a L-System model object [LModel](@ref).
+The domain specific language requires a single axiom and a set of rewriting rules.
+For example:
 
-# original: @axiom F
-# expanded: model = LModel()
-macro axiom(ex)
-    if @capture(ex, v_) && v isa Symbol
-        v_str = String(v)
-        quote
-            model = LModel($v_str)
-        end
-    else
-        error("cannot capture ex")
-        dump(ex)
-    end
+```
+model = @lsys begin
+    axiom : A
+    rule  : A → AB
+    rule  : B → A
 end
-
-# original: @rule F = F⊕F⊖F⊖F⊕F
-# expanded: add_rule(model, "F", split("F⊕F⊖F⊖F⊕F", ""))
-macro rule(ex)
-    if @capture(ex, v_ → w_)
-        v_str = String(v)
-        w_str = String(w)
-        quote
-            add_rule(model, $v_str, split($w_str, ""))
-        end
-    else
-        error("cannot capture ex")
-        dump(ex)
-    end
-end
-
-# Model DSL
+```
+"""
 macro lsys(ex)
-    ret = macroexpand(@__MODULE__, ex)
+    ex = MacroTools.postwalk(walk, ex)
+    push!(ex.args, :( model ))
+    return ex
+end
 
-    # Convert model symbol e.g. ##10#model -> model_1
-    ret = MacroTools.gensym_ids(ret)
-
-    # Replace first argument to the add_rule function with model_1 
-    ret = MacroTools.postwalk(
-        x -> @capture(x, f_(m_, left_, right_)) ?
-                :( LSystem.add_rule(model_1, $(left), $(right)) ) : x, ret)
-
-    # Make model_1 as the last expression of the block
-    ret = quote
-        $ret
-        model_1
+# Walk the AST tree and match expressions.
+function walk(ex)
+    
+    match_axiom = @capture(ex, axiom : sym_)
+    if match_axiom
+        sym_str = String(sym)
+        return :( model = LModel($sym_str) )
+    end
+    
+    match_rule = @capture(ex, rule : original_ → replacement_)
+    if match_rule
+        original_str = String(original)
+        replacement_str = String(replacement)
+        return :(
+            add_rule(model, $original_str, split($replacement_str, ""))
+        )
     end
 
-    # Flatten the code structure 
-    ret = MacroTools.flatten(ret)
-
-    # -- uncomment this line to debug --
-    # MacroTools.postwalk(rmlines, ret) |> println
-
-    return ret
+    return ex
 end
 
 end # module

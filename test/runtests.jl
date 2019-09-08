@@ -17,10 +17,10 @@ end
 
 # Algae
 
-algae_model = LSystem.@lsys begin
-    @axiom A
-    @rule A → AB
-    @rule B → A
+algae_model = @lsys begin
+    axiom : A
+    rule  : A → AB
+    rule  : B → A
 end
 
 @test (@> algae_model LState next(0) result) == "A"
