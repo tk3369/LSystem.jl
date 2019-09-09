@@ -2,18 +2,7 @@ using LSystem
 using Test
 using Lazy
 
-using LSystem: LModel, LState, next, result
-
 @testset "LSystem.jl" begin
-
-function generate(model::LModel, n::Integer)
-    state = LState(model)
-    println(state.current_iteration, " => ", join(state.result))
-    for i in 1:n
-        state = next(state)
-        println(state.current_iteration, " => ", join(state.result))
-    end
-end
 
 # Algae
 
