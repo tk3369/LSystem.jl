@@ -48,32 +48,27 @@ struct LState
 end
 
 "Create a L-system state from a `model`."
-LState(model) = LState(model, 1, model.axiom)
+LState(model::LModel) = LState(model, 1, model.axiom)
 
 "Advance to the next state and returns a new LState object."
-next(lstate::LState) = _expand(lstate.model, lstate) 
-
-"Current result suitable for display"
-result(lstate::LState) = join(lstate.result)
+function next(state::LState)
+    new_result = []
+    for el in state.result
+        next_el = get(state.model.rules, el, el)
+        push!.(Ref(new_result), next_el)
+    end
+    return LState(state.model, state.current_iteration + 1, new_result)
+end
 
 "Repeated next call"
-next(lstate::LState, n) = n > 0 ? next(next(lstate), n-1) : lstate
+next(state::LState, n) = n > 0 ? next(next(state), n-1) : state
+
+"Compact the result suitable for display"
+result(state::LState) = join(state.result)
 
 Base.show(io::IO, s::LState) = 
     print(io, "LState(", s.current_iteration, "): ", result(s))
 
-"""
-Expand the current result to a new result by applying the 
-rewriting rules in the model.
-"""
-function _expand(model::LModel, current_state::LState)
-    new_result = []
-    for el in current_state.result
-        next_el = get(model.rules, el, el)
-        push!.(Ref(new_result), next_el)
-    end
-    return LState(model, current_state.current_iteration + 1, new_result)
-end
 
 # DSL implementation
 
