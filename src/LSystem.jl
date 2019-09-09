@@ -1,6 +1,7 @@
 module LSystem
 
 export @lsys
+export LModel, add_rule!
 export LState, next, result
 
 using MacroTools
@@ -17,10 +18,13 @@ struct LModel
 end
 
 "Create a L-system model."
-LModel(axiom) = LModel(Any[axiom], Dict())
+LModel(axiom) = LModel([axiom], Dict())
 
 "Add rule to a model."
-add_rule(lmodel, left, right) = lmodel.rules[left] = right
+function add_rule!(model::LModel, left::T, right::T) where {T <: AbstractString}
+    model.rules[left] = split(right, "")
+    return nothing
+end
 
 "Display model nicely."
 function Base.show(io::IO, model::LModel)
@@ -49,7 +53,7 @@ LState(model) = LState(model, 1, model.axiom)
 "Advance to the next state and returns a new LState object."
 next(lstate::LState) = _expand(lstate.model, lstate) 
 
-"Current result"
+"Current result suitable for display"
 result(lstate::LState) = join(lstate.result)
 
 "Repeated next call"
@@ -106,7 +110,7 @@ function walk(ex)
         original_str = String(original)
         replacement_str = String(replacement)
         return :(
-            add_rule(model, $original_str, split($replacement_str, ""))
+            add_rule!(model, $original_str, $replacement_str)
         )
     end
 
